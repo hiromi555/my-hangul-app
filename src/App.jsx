@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { assemble } from 'es-hangul';
 
-// --- データ定義（変更なし） ---
+// --- データ定義 ---
 const INITIALS = [
   { char: 'ㄱ', sound: 'k/g', kana: 'カ/ガ' },
   { char: 'ㄲ', sound: 'kk',  kana: 'ッガ' },
@@ -81,23 +81,21 @@ function App() {
   const [patchim, setPatchim] = useState('');
 
   const [isStackView, setIsStackView] = useState(window.innerWidth < 768 || window.innerHeight > window.innerWidth);
-
   const [activeTab, setActiveTab] = useState('initial');
 
-  // 作成中の単語（ハングル）
   const [sentence, setSentence] = useState('');
-  // 作成中の意味（日本語）
   const [meaning, setMeaning] = useState('');
 
-  // ★保存された単語帳リスト（初期値はローカルストレージから読み込む）
   const [vocabList, setVocabList] = useState(() => {
     const saved = localStorage.getItem('myVocabList');
     return saved ? JSON.parse(saved) : [];
   });
 
+  // ★答えを表示している単語のIDを管理するリスト
+  const [revealedIds, setRevealedIds] = useState(new Set());
+
   const completeChar = assemble([initial, vowel, patchim]);
 
-  // リサイズ検知
   useEffect(() => {
     const handleResize = () => {
       setIsStackView(window.innerWidth < 768 || window.innerHeight > window.innerWidth);
@@ -106,7 +104,6 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // ★単語帳リストが更新されたら、ローカルストレージに保存する
   useEffect(() => {
     localStorage.setItem('myVocabList', JSON.stringify(vocabList));
   }, [vocabList]);
@@ -150,27 +147,36 @@ function App() {
     setSentence(prev => prev.slice(0, -1));
   };
 
-  // ★単語帳に登録する機能
   const saveToVocabList = () => {
-    if (!sentence) return; // 空なら何もしない
+    if (!sentence) return;
 
     const newItem = {
-      id: Date.now(), // ユニークなID
+      id: Date.now(),
       hangul: sentence,
-      meaning: meaning || '（意味なし）', // 意味が空なら仮の文字
+      meaning: meaning || '（意味なし）',
       date: new Date().toLocaleDateString()
     };
 
-    setVocabList([newItem, ...vocabList]); // 新しいものを上に
-    setSentence(''); // 入力欄をクリア
+    setVocabList([newItem, ...vocabList]);
+    setSentence('');
     setMeaning('');
   };
 
-  // ★単語帳から削除する機能
   const deleteFromVocabList = (id) => {
     if (window.confirm('この単語を削除してもいいですか？')) {
       setVocabList(vocabList.filter(item => item.id !== id));
     }
+  };
+
+  // ★答えの表示/非表示を切り替える関数
+  const toggleReveal = (id) => {
+    const next = new Set(revealedIds);
+    if (next.has(id)) {
+      next.delete(id); // 表示中なら隠す
+    } else {
+      next.add(id); // 隠れてるなら表示する
+    }
+    setRevealedIds(next);
   };
 
   const getButtonStyle = (isSelected, colorBase, isPatchim = false, groupColor = null) => {
@@ -201,6 +207,7 @@ function App() {
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '10px 5px', fontFamily: '"Helvetica Neue", sans-serif', textAlign: 'center', backgroundColor: '#f9f9f9', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+
       <div style={{
         display: 'flex',
         flexDirection: isStackView ? 'column' : 'row',
@@ -290,14 +297,12 @@ function App() {
           display: 'flex', flexDirection: 'column', gap: '20px'
         }}>
 
-          {/* 入力・登録フォーム */}
           <div style={{ background: '#fff', borderRadius: '20px', border: '1px solid #ddd', padding: '15px' }}>
-
             <div style={{ marginBottom: '10px' }}>
               <input
                 type="text"
                 value={sentence}
-                readOnly // 手入力禁止（組み立て専用）にする場合
+                readOnly
                 placeholder="左で作った文字がここに入ります"
                 style={{
                   width: '100%', padding: '10px', fontSize: '20px', textAlign: 'center',
@@ -316,13 +321,12 @@ function App() {
               </button>
             </div>
 
-            {/* 意味入力欄 */}
             <div style={{ marginBottom: '10px' }}>
               <input
                 type="text"
                 value={meaning}
                 onChange={(e) => setMeaning(e.target.value)}
-                placeholder="日本語の意味を入力（例：私）"
+                placeholder="日本語の意味を入力"
                 style={{
                   width: '100%', padding: '10px', fontSize: '14px',
                   borderRadius: '10px', border: '1px solid #ccc',
@@ -336,17 +340,35 @@ function App() {
             </button>
           </div>
 
-          {/* 保存リスト表示 */}
           {vocabList.length > 0 && (
             <div style={{ background: '#fff', borderRadius: '20px', border: '1px solid #ddd', padding: '15px' }}>
-              <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#333' }}>📖 覚えるリスト ({vocabList.length})</h3>
+              <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#333' }}>📖 暗記カード ({vocabList.length})</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {vocabList.map((item) => (
                   <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff8e1', padding: '10px', borderRadius: '10px', border: '1px solid #ffecb3' }}>
 
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#333' }}>{item.hangul}</div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>{item.meaning}</div>
+                    <div style={{ textAlign: 'left', flex: 1 }}>
+                      {/* ハングル表示 */}
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '4px' }}>
+                        {item.hangul}
+                      </div>
+
+                      {/* ★ここが暗記機能！ */}
+                      <div
+                        onClick={() => toggleReveal(item.id)}
+                        style={{
+                          fontSize: '12px',
+                          color: revealedIds.has(item.id) ? '#d84315' : '#888',
+                          fontWeight: revealedIds.has(item.id) ? 'bold' : 'normal',
+                          background: revealedIds.has(item.id) ? 'transparent' : '#eee',
+                          padding: revealedIds.has(item.id) ? '0' : '4px 8px',
+                          borderRadius: '4px',
+                          display: 'inline-block',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {revealedIds.has(item.id) ? item.meaning : '🙈 答えを見る'}
+                      </div>
                     </div>
 
                     <div style={{ display: 'flex', gap: '10px' }}>
