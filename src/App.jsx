@@ -96,10 +96,20 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 音声再生関数
+ // 音声再生関数（iPhone強制対応版）
   const speak = (text) => {
-    window.speechSynthesis.cancel(); // 前の音を消す
+    window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const krVoice = voices.find(v => v.lang.includes('ko'));
+    if (krVoice) {
+      utterance.voice = krVoice;
+    } else {
+      // 見つからなかった場合、アラートを出してあげる（デバッグ用）
+      // ※本番では消してもいいですが、今は原因特定のために出します
+      // alert("iPhoneの中に韓国語の音声データが見つかりません！設定を確認してね");
+    }
+
     utterance.lang = 'ko-KR';
     utterance.rate = 0.8;
     window.speechSynthesis.speak(utterance);
