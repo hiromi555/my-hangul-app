@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { assemble } from 'es-hangul';
 
-
-
-// --- データ定義 ---
+// --- データ定義（そのまま） ---
 const INITIALS = [
   { char: 'ㄱ', sound: 'k/g', kana: 'カ/ガ' },
   { char: 'ㄲ', sound: 'kk',  kana: 'ッガ' },
@@ -27,7 +25,6 @@ const INITIALS = [
 ];
 
 const VOWELS = [
-  // 基本母音
   { char: 'ㅏ', sound: 'a',   kana: 'ア', type: 'basic' },
   { char: 'ㅑ', sound: 'ya',  kana: 'ヤ', type: 'basic' },
   { char: 'ㅓ', sound: 'eo',  kana: 'オ(開)', type: 'basic' },
@@ -38,7 +35,6 @@ const VOWELS = [
   { char: 'ㅠ', sound: 'yu',  kana: 'ユ', type: 'basic' },
   { char: 'ㅡ', sound: 'eu',  kana: 'ウ(横)', type: 'basic' },
   { char: 'ㅣ', sound: 'i',   kana: 'イ', type: 'basic' },
-  // 複合母音
   { char: 'ㅐ', sound: 'ae',  kana: 'エ', type: 'complex' },
   { char: 'ㅒ', sound: 'yae', kana: 'イェ', type: 'complex' },
   { char: 'ㅔ', sound: 'e',   kana: 'エ', type: 'complex' },
@@ -84,16 +80,20 @@ function App() {
   const [vowel, setVowel] = useState('ㅏ');
   const [patchim, setPatchim] = useState('');
 
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [activeTab, setActiveTab] = useState('initial');
+  // ★変更点：縦長(Portrait)か横長(Landscape)かで判定！
+  // 幅が狭い(768px未満) または 縦の方が長い場合を「モバイルモード」とする
+  const [isStackView, setIsStackView] = useState(window.innerWidth < 768 || window.innerHeight > window.innerWidth);
 
-  // 作った単語・文章を保存しておく場所
+  const [activeTab, setActiveTab] = useState('initial');
   const [sentence, setSentence] = useState('');
 
   const completeChar = assemble([initial, vowel, patchim]);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    const handleResize = () => {
+      // 画面サイズが変わるたびに「今は縦積みすべきか？」を判定
+      setIsStackView(window.innerWidth < 768 || window.innerHeight > window.innerWidth);
+    };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -113,14 +113,14 @@ function App() {
     setInitial(char);
     const nextText = assemble([char, vowel, patchim]);
     speak(nextText);
-    if(isMobile) setTimeout(()=> setActiveTab('vowel'), 300);
+    if(isStackView) setTimeout(()=> setActiveTab('vowel'), 300);
   };
 
   const handleVowelClick = (char) => {
     setVowel(char);
     const nextText = assemble([initial, char, patchim]);
     speak(nextText);
-    if(isMobile) setTimeout(()=> setActiveTab('patchim'), 300);
+    if(isStackView) setTimeout(()=> setActiveTab('patchim'), 300);
   };
 
   const handlePatchimClick = (char) => {
@@ -129,12 +129,10 @@ function App() {
     speak(nextText);
   };
 
-  // 文字を文章に追加
   const addToSentence = () => {
     setSentence(prev => prev + completeChar);
   };
 
-  // 文章を一文字消す
   const backspaceSentence = () => {
     setSentence(prev => prev.slice(0, -1));
   };
@@ -145,8 +143,8 @@ function App() {
     const background = isSelected ? (isPatchim && groupColor ? groupColor : colorBase) : '#fff';
     const textColor = isSelected && !isPatchim ? '#fff' : '#333';
     return {
-      width: isMobile ? '50px' : '55px',
-      height: isMobile ? '50px' : '55px',
+      width: isStackView ? '45px' : '50px', // 少し小さめにして数多く並べる
+      height: isStackView ? '45px' : '50px',
       border: `${borderWidth} solid ${borderColor}`,
       background: background,
       color: textColor,
@@ -166,33 +164,44 @@ function App() {
   });
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '10px', fontFamily: '"Helvetica Neue", sans-serif', textAlign: 'center', backgroundColor: '#f9f9f9', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '10px 5px', fontFamily: '"Helvetica Neue", sans-serif', textAlign: 'center', backgroundColor: '#f9f9f9', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+
+      {/* 見出し削除！
+          いきなりアプリのメイン画面から始まります。
+      */}
 
       <div style={{
         display: 'flex',
-        flexDirection: isMobile ? 'column' : 'row',
-        gap: '20px',
+        flexDirection: isStackView ? 'column' : 'row', // 縦長なら縦積み、横長なら横並び
+        gap: '15px',
         alignItems: 'flex-start'
       }}>
 
-        {/* --- 左（上）：文字組み立てエリア --- */}
+        {/* --- 1. 文字組み立てエリア --- */}
         <div style={{ flex: 1, width: '100%' }}>
 
-          <div style={{ background: 'white', padding: '15px', borderRadius: '20px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', marginBottom: '15px', position: 'sticky', top: '10px', zIndex: 100 }}>
-            <div style={{ fontSize: '70px', fontWeight: 'bold', lineHeight: 1, marginBottom:'10px' }}>{completeChar}</div>
+          {/* ★変更点：文字の「横」にボタンを配置して省スペース化！ */}
+          <div style={{ background: 'white', padding: '10px', borderRadius: '15px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)', marginBottom: '10px', position: 'sticky', top: '5px', zIndex: 100 }}>
 
-            <div style={{ display:'flex', justifyContent:'center', gap:'10px' }}>
-              <button onClick={() => speak(completeChar)} style={{ padding: '8px 20px', borderRadius: '20px', border:'none', background:'#333', color:'white', cursor:'pointer', fontWeight:'bold' }}>
-                🔊 再生
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
+              {/* 左：大きく文字表示 */}
+              <div style={{ fontSize: '70px', fontWeight: 'bold', lineHeight: 1 }}>{completeChar}</div>
 
-              <button onClick={addToSentence} style={{ padding: '8px 20px', borderRadius: '20px', border:'none', background:'#2196f3', color:'white', cursor:'pointer', fontWeight:'bold', boxShadow:'0 4px 0 #1565c0' }}>
-                ⬇️ 追加
-              </button>
+              {/* 右：操作ボタン（縦に並べる） */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button onClick={() => speak(completeChar)} style={{ padding: '8px 15px', borderRadius: '15px', border:'none', background:'#333', color:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
+                  🔊 再生
+                </button>
+                <button onClick={addToSentence} style={{ padding: '8px 15px', borderRadius: '15px', border:'none', background:'#2196f3', color:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px', boxShadow:'0 3px 0 #1565c0' }}>
+                  ⬇️ 追加
+                </button>
+              </div>
             </div>
+
           </div>
 
-          {isMobile && (
+          {/* タブ（縦長表示の時だけ） */}
+          {isStackView && (
             <div style={{ display: 'flex', marginBottom: '10px', background: 'white', borderRadius: '10px' }}>
               <button onClick={() => setActiveTab('initial')} style={tabButtonStyle('initial', '#2196f3')}>① 子音</button>
               <button onClick={() => setActiveTab('vowel')} style={tabButtonStyle('vowel', '#f44336')}>② 母音</button>
@@ -200,10 +209,10 @@ function App() {
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'column', gap: '15px' }}>
-            {(!isMobile || activeTab === 'initial') && (
-              <div style={{ background: '#e3f2fd', padding: '10px', borderRadius: '15px' }}>
-                {!isMobile && <h3 style={{ color: '#1976d2', marginTop: 0, fontSize:'14px' }}>① 子音</h3>}
+          {/* キーボードエリア */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {(!isStackView || activeTab === 'initial') && (
+              <div style={{ background: '#e3f2fd', padding: '8px', borderRadius: '15px' }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
                   {INITIALS.map((item) => (
                     <button key={item.char} onClick={() => handleInitialClick(item.char)} style={getButtonStyle(initial === item.char, '#2196f3')}>
@@ -215,9 +224,8 @@ function App() {
               </div>
             )}
 
-            {(!isMobile || activeTab === 'vowel') && (
-              <div style={{ background: '#ffebee', padding: '10px', borderRadius: '15px' }}>
-                {!isMobile && <h3 style={{ color: '#d32f2f', marginTop: 0, fontSize:'14px' }}>② 母音</h3>}
+            {(!isStackView || activeTab === 'vowel') && (
+              <div style={{ background: '#ffebee', padding: '8px', borderRadius: '15px' }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
                   {VOWELS.map((item, index) => {
                     const isFirstComplex = index === 10;
@@ -235,9 +243,9 @@ function App() {
               </div>
             )}
 
-            {(!isMobile || activeTab === 'patchim') && (
-              <div style={{ background: '#f1f8e9', padding: '10px', borderRadius: '15px' }}>
-                {!isMobile && <h3 style={{ color: '#388e3c', marginTop: 0, fontSize:'14px' }}>③ パッチム</h3>}
+            {(!isStackView || activeTab === 'patchim') && (
+              <div style={{ background: '#f1f8e9', padding: '8px', borderRadius: '15px' }}>
+                {/* 凡例も小さく表示 */}
                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '3px', marginBottom: '5px', fontSize: '9px' }}>
                   {Object.entries(SOUND_GROUPS).map(([key, group]) => ( key !== 'none' && (<div key={key} style={{ display: 'flex', alignItems: 'center', gap: '2px', background: group.color, padding:'1px 3px', borderRadius:'3px', border:'1px solid #ccc' }}><span style={{ fontWeight:'bold' }}>{group.label}</span></div>)))}
                 </div>
@@ -252,26 +260,26 @@ function App() {
           </div>
         </div>
 
-        {/* --- 右（下）：📝 単語・文章メモエリア --- */}
+        {/* --- 2. 📝 単語・文章メモエリア --- */}
         <div style={{
-          flex: isMobile ? 'none' : '0 0 350px',
+          flex: isStackView ? 'none' : '0 0 320px', // PC時は320px幅に固定
           width: '100%',
           background: '#fff',
           borderRadius: '20px',
-          border: '2px solid #eee',
-          padding: '20px',
+          border: '1px solid #ddd',
+          padding: '15px',
           boxSizing: 'border-box'
         }}>
-          <h3 style={{ marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>📝 単語・文章メモ</h3>
+          {/* 見出し削除 */}
 
-          <div style={{ marginBottom: '20px' }}>
+          <div style={{ marginBottom: '15px' }}>
             <textarea
               value={sentence}
               onChange={(e) => setSentence(e.target.value)}
-              placeholder="ここに文字が追加されます"
+              placeholder="作った単語がここに入ります"
               style={{
-                width: '100%', height: '100px',
-                fontSize: '24px', padding: '10px',
+                width: '100%', height: '80px',
+                fontSize: '20px', padding: '10px',
                 borderRadius: '10px', border: '2px solid #b3e5fc',
                 resize: 'none', fontFamily: '"Helvetica Neue", sans-serif',
                 boxSizing: 'border-box'
@@ -280,28 +288,18 @@ function App() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button onClick={() => speak(sentence)} style={{ padding: '15px', borderRadius: '10px', border:'none', background:'#ffdd59', color:'#333', cursor:'pointer', fontWeight:'bold', fontSize:'18px', boxShadow:'0 3px 0 #fbc02d' }}>
+            <button onClick={() => speak(sentence)} style={{ padding: '12px', borderRadius: '10px', border:'none', background:'#ffdd59', color:'#333', cursor:'pointer', fontWeight:'bold', fontSize:'16px', boxShadow:'0 3px 0 #fbc02d' }}>
               🔊 まとめて再生
             </button>
 
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={backspaceSentence} style={{ flex: 1, padding: '10px', borderRadius: '10px', border:'none', background:'#eee', color:'#333', cursor:'pointer', fontWeight:'bold' }}>
+              <button onClick={backspaceSentence} style={{ flex: 1, padding: '10px', borderRadius: '10px', border:'none', background:'#f5f5f5', color:'#333', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
                 ⌫ 1文字消す
               </button>
-              <button onClick={() => setSentence('')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border:'none', background:'#eee', color:'#d32f2f', cursor:'pointer', fontWeight:'bold' }}>
+              <button onClick={() => setSentence('')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border:'none', background:'#f5f5f5', color:'#d32f2f', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
                 🗑️ 全消去
               </button>
             </div>
-          </div>
-
-          <div style={{ marginTop: '20px', fontSize: '12px', color: '#888', textAlign: 'left', lineHeight: '1.5' }}>
-            <p>💡 <strong>使い方：</strong></p>
-            <ol style={{ paddingLeft: '20px', margin: 0 }}>
-              <li>左で文字を組み立てる</li>
-              <li>「⬇️ 追加」ボタンを押す</li>
-              <li>文字がここに貯まっていく</li>
-              <li>「まとめて再生」で発音チェック！</li>
-            </ol>
           </div>
         </div>
 
