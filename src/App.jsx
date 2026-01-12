@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { assemble } from 'es-hangul';
 
-// --- データ定義（そのまま） ---
+// --- データ定義（変更なし） ---
 const INITIALS = [
   { char: 'ㄱ', sound: 'k/g', kana: 'カ/ガ' },
   { char: 'ㄲ', sound: 'kk',  kana: 'ッガ' },
@@ -80,23 +80,36 @@ function App() {
   const [vowel, setVowel] = useState('ㅏ');
   const [patchim, setPatchim] = useState('');
 
-  // ★変更点：縦長(Portrait)か横長(Landscape)かで判定！
-  // 幅が狭い(768px未満) または 縦の方が長い場合を「モバイルモード」とする
   const [isStackView, setIsStackView] = useState(window.innerWidth < 768 || window.innerHeight > window.innerWidth);
 
   const [activeTab, setActiveTab] = useState('initial');
+
+  // 作成中の単語（ハングル）
   const [sentence, setSentence] = useState('');
+  // 作成中の意味（日本語）
+  const [meaning, setMeaning] = useState('');
+
+  // ★保存された単語帳リスト（初期値はローカルストレージから読み込む）
+  const [vocabList, setVocabList] = useState(() => {
+    const saved = localStorage.getItem('myVocabList');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const completeChar = assemble([initial, vowel, patchim]);
 
+  // リサイズ検知
   useEffect(() => {
     const handleResize = () => {
-      // 画面サイズが変わるたびに「今は縦積みすべきか？」を判定
       setIsStackView(window.innerWidth < 768 || window.innerHeight > window.innerWidth);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // ★単語帳リストが更新されたら、ローカルストレージに保存する
+  useEffect(() => {
+    localStorage.setItem('myVocabList', JSON.stringify(vocabList));
+  }, [vocabList]);
 
   const speak = (text) => {
     window.speechSynthesis.cancel();
@@ -137,13 +150,36 @@ function App() {
     setSentence(prev => prev.slice(0, -1));
   };
 
+  // ★単語帳に登録する機能
+  const saveToVocabList = () => {
+    if (!sentence) return; // 空なら何もしない
+
+    const newItem = {
+      id: Date.now(), // ユニークなID
+      hangul: sentence,
+      meaning: meaning || '（意味なし）', // 意味が空なら仮の文字
+      date: new Date().toLocaleDateString()
+    };
+
+    setVocabList([newItem, ...vocabList]); // 新しいものを上に
+    setSentence(''); // 入力欄をクリア
+    setMeaning('');
+  };
+
+  // ★単語帳から削除する機能
+  const deleteFromVocabList = (id) => {
+    if (window.confirm('この単語を削除してもいいですか？')) {
+      setVocabList(vocabList.filter(item => item.id !== id));
+    }
+  };
+
   const getButtonStyle = (isSelected, colorBase, isPatchim = false, groupColor = null) => {
     const borderColor = isPatchim && groupColor ? groupColor : (isSelected ? colorBase : '#ddd');
     const borderWidth = isPatchim ? '3px' : (isSelected ? '2px' : '1px');
     const background = isSelected ? (isPatchim && groupColor ? groupColor : colorBase) : '#fff';
     const textColor = isSelected && !isPatchim ? '#fff' : '#333';
     return {
-      width: isStackView ? '45px' : '50px', // 少し小さめにして数多く並べる
+      width: isStackView ? '45px' : '50px',
       height: isStackView ? '45px' : '50px',
       border: `${borderWidth} solid ${borderColor}`,
       background: background,
@@ -165,14 +201,9 @@ function App() {
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '10px 5px', fontFamily: '"Helvetica Neue", sans-serif', textAlign: 'center', backgroundColor: '#f9f9f9', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-
-      {/* 見出し削除！
-          いきなりアプリのメイン画面から始まります。
-      */}
-
       <div style={{
         display: 'flex',
-        flexDirection: isStackView ? 'column' : 'row', // 縦長なら縦積み、横長なら横並び
+        flexDirection: isStackView ? 'column' : 'row',
         gap: '15px',
         alignItems: 'flex-start'
       }}>
@@ -180,14 +211,9 @@ function App() {
         {/* --- 1. 文字組み立てエリア --- */}
         <div style={{ flex: 1, width: '100%' }}>
 
-          {/* ★変更点：文字の「横」にボタンを配置して省スペース化！ */}
           <div style={{ background: 'white', padding: '10px', borderRadius: '15px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)', marginBottom: '10px', position: 'sticky', top: '5px', zIndex: 100 }}>
-
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
-              {/* 左：大きく文字表示 */}
               <div style={{ fontSize: '70px', fontWeight: 'bold', lineHeight: 1 }}>{completeChar}</div>
-
-              {/* 右：操作ボタン（縦に並べる） */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <button onClick={() => speak(completeChar)} style={{ padding: '8px 15px', borderRadius: '15px', border:'none', background:'#333', color:'white', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
                   🔊 再生
@@ -197,10 +223,8 @@ function App() {
                 </button>
               </div>
             </div>
-
           </div>
 
-          {/* タブ（縦長表示の時だけ） */}
           {isStackView && (
             <div style={{ display: 'flex', marginBottom: '10px', background: 'white', borderRadius: '10px' }}>
               <button onClick={() => setActiveTab('initial')} style={tabButtonStyle('initial', '#2196f3')}>① 子音</button>
@@ -209,7 +233,6 @@ function App() {
             </div>
           )}
 
-          {/* キーボードエリア */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {(!isStackView || activeTab === 'initial') && (
               <div style={{ background: '#e3f2fd', padding: '8px', borderRadius: '15px' }}>
@@ -245,7 +268,6 @@ function App() {
 
             {(!isStackView || activeTab === 'patchim') && (
               <div style={{ background: '#f1f8e9', padding: '8px', borderRadius: '15px' }}>
-                {/* 凡例も小さく表示 */}
                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '3px', marginBottom: '5px', fontSize: '9px' }}>
                   {Object.entries(SOUND_GROUPS).map(([key, group]) => ( key !== 'none' && (<div key={key} style={{ display: 'flex', alignItems: 'center', gap: '2px', background: group.color, padding:'1px 3px', borderRadius:'3px', border:'1px solid #ccc' }}><span style={{ fontWeight:'bold' }}>{group.label}</span></div>)))}
                 </div>
@@ -260,47 +282,84 @@ function App() {
           </div>
         </div>
 
-        {/* --- 2. 📝 単語・文章メモエリア --- */}
+        {/* --- 2. 📝 マイ単語帳エリア --- */}
         <div style={{
-          flex: isStackView ? 'none' : '0 0 320px', // PC時は320px幅に固定
+          flex: isStackView ? 'none' : '0 0 320px',
           width: '100%',
-          background: '#fff',
-          borderRadius: '20px',
-          border: '1px solid #ddd',
-          padding: '15px',
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
+          display: 'flex', flexDirection: 'column', gap: '20px'
         }}>
-          {/* 見出し削除 */}
 
-          <div style={{ marginBottom: '15px' }}>
-            <textarea
-              value={sentence}
-              onChange={(e) => setSentence(e.target.value)}
-              placeholder="作った単語がここに入ります"
-              style={{
-                width: '100%', height: '80px',
-                fontSize: '20px', padding: '10px',
-                borderRadius: '10px', border: '2px solid #b3e5fc',
-                resize: 'none', fontFamily: '"Helvetica Neue", sans-serif',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
+          {/* 入力・登録フォーム */}
+          <div style={{ background: '#fff', borderRadius: '20px', border: '1px solid #ddd', padding: '15px' }}>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button onClick={() => speak(sentence)} style={{ padding: '12px', borderRadius: '10px', border:'none', background:'#ffdd59', color:'#333', cursor:'pointer', fontWeight:'bold', fontSize:'16px', boxShadow:'0 3px 0 #fbc02d' }}>
-              🔊 まとめて再生
-            </button>
+            <div style={{ marginBottom: '10px' }}>
+              <input
+                type="text"
+                value={sentence}
+                readOnly // 手入力禁止（組み立て専用）にする場合
+                placeholder="左で作った文字がここに入ります"
+                style={{
+                  width: '100%', padding: '10px', fontSize: '20px', textAlign: 'center',
+                  borderRadius: '10px', border: '2px solid #b3e5fc', background: '#f0f8ff',
+                  boxSizing: 'border-box', fontWeight: 'bold', color: '#1976d2'
+                }}
+              />
+            </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={backspaceSentence} style={{ flex: 1, padding: '10px', borderRadius: '10px', border:'none', background:'#f5f5f5', color:'#333', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
+            <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
+              <button onClick={backspaceSentence} style={{ flex: 1, padding: '8px', borderRadius: '8px', border:'none', background:'#eee', color:'#333', cursor:'pointer', fontSize:'12px' }}>
                 ⌫ 1文字消す
               </button>
-              <button onClick={() => setSentence('')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border:'none', background:'#f5f5f5', color:'#d32f2f', cursor:'pointer', fontWeight:'bold', fontSize:'12px' }}>
-                🗑️ 全消去
+              <button onClick={() => setSentence('')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border:'none', background:'#eee', color:'#d32f2f', cursor:'pointer', fontSize:'12px' }}>
+                🗑️ クリア
               </button>
             </div>
+
+            {/* 意味入力欄 */}
+            <div style={{ marginBottom: '10px' }}>
+              <input
+                type="text"
+                value={meaning}
+                onChange={(e) => setMeaning(e.target.value)}
+                placeholder="日本語の意味を入力（例：私）"
+                style={{
+                  width: '100%', padding: '10px', fontSize: '14px',
+                  borderRadius: '10px', border: '1px solid #ccc',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            <button onClick={saveToVocabList} disabled={!sentence} style={{ width: '100%', padding: '12px', borderRadius: '10px', border:'none', background: sentence ? '#ff9800' : '#ccc', color:'white', cursor: sentence ? 'pointer' : 'not-allowed', fontWeight:'bold', fontSize:'16px', boxShadow: sentence ? '0 3px 0 #f57c00' : 'none' }}>
+              ⭐️ リストに保存する
+            </button>
           </div>
+
+          {/* 保存リスト表示 */}
+          {vocabList.length > 0 && (
+            <div style={{ background: '#fff', borderRadius: '20px', border: '1px solid #ddd', padding: '15px' }}>
+              <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#333' }}>📖 覚えるリスト ({vocabList.length})</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {vocabList.map((item) => (
+                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff8e1', padding: '10px', borderRadius: '10px', border: '1px solid #ffecb3' }}>
+
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#333' }}>{item.hangul}</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>{item.meaning}</div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button onClick={() => speak(item.hangul)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}>🔊</button>
+                      <button onClick={() => deleteFromVocabList(item.id)} style={{ background: 'none', border: 'none', fontSize: '16px', cursor: 'pointer', opacity: 0.5 }}>❌</button>
+                    </div>
+
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
 
       </div>
