@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { assemble } from 'es-hangul';
 
+// --- シャッフル関数（トランプを切るようなロジック） ---
+const shuffleArray = (array) => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
+
 // --- データ定義 ---
 const INITIALS = [
   { char: 'ㄱ', sound: 'k/g', kana: 'カ/ガ' },
@@ -86,12 +96,13 @@ function App() {
   const [sentence, setSentence] = useState('');
   const [meaning, setMeaning] = useState('');
 
+  // ★変更点：初期読み込み時にシャッフルを実行！
   const [vocabList, setVocabList] = useState(() => {
     const saved = localStorage.getItem('myVocabList');
-    return saved ? JSON.parse(saved) : [];
+    const initialList = saved ? JSON.parse(saved) : [];
+    return shuffleArray(initialList); // ここで混ぜる！
   });
 
-  // ★答えを表示している単語のIDを管理するリスト
   const [revealedIds, setRevealedIds] = useState(new Set());
 
   const completeChar = assemble([initial, vowel, patchim]);
@@ -168,15 +179,19 @@ function App() {
     }
   };
 
-  // ★答えの表示/非表示を切り替える関数
   const toggleReveal = (id) => {
     const next = new Set(revealedIds);
     if (next.has(id)) {
-      next.delete(id); // 表示中なら隠す
+      next.delete(id);
     } else {
-      next.add(id); // 隠れてるなら表示する
+      next.add(id);
     }
     setRevealedIds(next);
+  };
+
+  // ★追加：手動シャッフル機能
+  const handleManualShuffle = () => {
+    setVocabList(prev => shuffleArray(prev));
   };
 
   const getButtonStyle = (isSelected, colorBase, isPatchim = false, groupColor = null) => {
@@ -342,18 +357,23 @@ function App() {
 
           {vocabList.length > 0 && (
             <div style={{ background: '#fff', borderRadius: '20px', border: '1px solid #ddd', padding: '15px' }}>
-              <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#333' }}>📖 暗記カード ({vocabList.length})</h3>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' }}>
+                <h3 style={{ margin: 0, fontSize: '16px', color: '#333' }}>📖 暗記カード ({vocabList.length})</h3>
+                {/* ★追加：シャッフルボタン */}
+                <button onClick={handleManualShuffle} style={{ padding:'4px 8px', borderRadius:'5px', border:'1px solid #ddd', background:'#f0f0f0', cursor:'pointer', fontSize:'12px' }}>
+                  🔀 混ぜる
+                </button>
+              </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {vocabList.map((item) => (
                   <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff8e1', padding: '10px', borderRadius: '10px', border: '1px solid #ffecb3' }}>
 
                     <div style={{ textAlign: 'left', flex: 1 }}>
-                      {/* ハングル表示 */}
                       <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '4px' }}>
                         {item.hangul}
                       </div>
 
-                      {/* ★ここが暗記機能！ */}
                       <div
                         onClick={() => toggleReveal(item.id)}
                         style={{
